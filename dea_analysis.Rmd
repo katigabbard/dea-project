@@ -1,0 +1,72 @@
+---
+title: "dea_analysis"
+output: html_document
+---
+
+#00 setup
+#a. load packages, set directory
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '/storage1/fs1/seethu/Active/The_Dope_Detectives')
+
+library(tidyverse)
+
+#stop unnecessary alerts
+options(tidyverse.quiet = TRUE)
+options(dplyr.summarise.inform = FALSE)
+```
+
+#b. load data
+```{r}
+bad <- read.csv("Bad_Buyers_Data.csv") %>% as_tibble()
+clean <- read.csv("Clean_Buyers_Data.csv") %>% as_tibble()
+
+set.seed(1)
+subset <- sample(nrow(clean), nrow(clean)/2)
+train <- clean[subset,]
+validation <- clean[-subset,]
+```
+
+#01 multivariate gaussian 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
