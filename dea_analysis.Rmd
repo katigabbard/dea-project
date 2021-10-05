@@ -3,6 +3,17 @@ title: "dea_analysis"
 output: html_document
 ---
 
+Anomaly Detection Algorithms
+Load in Clean_Buyers_Data that contains 50,000 buyers. Buyers in this data set haven't yet been identified as good or bad. We want to identify anomalies that may be hidden in this clean data set. Anomalies will be labeled as bad buyers.
+
+Load in Bad_Buyers_Data that contains 188 buyers. Buyers in this data set have been convicted and are known bad buyers of opioids. These buyers will be used to judge various anomaly detection algorithm performance. 
+
+Four anomaly detection algorithms will be analyzed:
+1. Joint Gaussian
+2. Multivariate Gaussian
+3. Isolation Forest
+4. Local Outlier Factor
+
 #00 setup
 #a. load packages, set directory
 ```{r setup, include=FALSE}
@@ -10,6 +21,9 @@ knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(root.dir = '/storage1/fs1/seethu/Active/The_Dope_Detectives')
 
 library(tidyverse)
+library(ggplot2)
+library(solitude) #isolation forest
+library(isotree)  #isolation forest
 
 #stop unnecessary alerts
 options(tidyverse.quiet = TRUE)
@@ -17,17 +31,75 @@ options(dplyr.summarise.inform = FALSE)
 ```
 
 #b. load data
+- note: feature engineering will be needed to optimize gaussian anomaly detections
 ```{r}
 bad <- read.csv("Bad_Buyers_Data.csv") %>% as_tibble()
 clean <- read.csv("Clean_Buyers_Data.csv") %>% as_tibble()
 
+#choose variables of interest -- todo: feature engineering
+#get top 19 seethu recommended, currently waiting on data dictionary from annie
+clean <- clean %>% 
+  select(
+    X, BUYER_DEA_NO, #for record reference
+    avg_MME, max_MME, std_MME
+    
+  )
+  
+names(clean)
+
+#subset test and train, 50/50 split
 set.seed(1)
 subset <- sample(nrow(clean), nrow(clean)/2)
 train <- clean[subset,]
 validation <- clean[-subset,]
+
+#clean up
+rm(subset)
 ```
 
-#01 multivariate gaussian 
+
+#01 Joint Gaussian
+
+#02 Multivariate Gaussian
+
+#03 Isolation Forest
+Isolation Forests use isolation trees to determine the path length it takes for each record to be isolated on a node of the tree. Uses binary splits from a randomly selected variable.
+- packages used: solitude or isotree Need to select one of the two. For now implement in solitude unless limitations are found
+#a. solitude implementation
+- doesn't support NA values
+```{r}
+head(train)
+#see there are many NA values in the data -- can't make a random forest if there are NAs. either drop these cases or impute
+
+iso <- isolationForest$new()
+iso$fit(train)
+
+#In any case, if your predictors have missing values, you have (basically) two choices:
+# 1. Use a different tool (rpart handles missing values nicely.)
+# 2. Impute the missing values
+#Not surprisingly, the randomForest package has a function for doing just this, rfImpute. The documentation at ?rfImpute runs through a basic example of its use.
+
+
+
+scores_train = pima_train %>%
+iso$predict() %>%
+arrange(desc(anomaly_score))
+
+```
+
+#b. isotree implementation
+```{r}
+head(train)
+
+isolation.forest(
+  df = train,
+  sample_size = nrow(train),
+  
+)
+```
+
+
+#04 Local Outlier Factor
 
 
 
