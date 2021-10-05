@@ -1,0 +1,316 @@
+---
+title: "dea_analysis"
+output: html_document
+---
+
+Anomaly Detection Algorithms
+Load in Clean_Buyers_Data that contains 50,000 buyers. Buyers in this data set haven't yet been identified as good or bad. We want to identify anomalies that may be hidden in this clean data set. Anomalies will be labeled as bad buyers.
+
+Load in Bad_Buyers_Data that contains 188 buyers. Buyers in this data set have been convicted and are known bad buyers of opioids. These buyers will be used to judge various anomaly detection algorithm performance. 
+
+Four anomaly detection algorithms will be analyzed:
+1. Joint Gaussian
+2. Multivariate Gaussian
+3. Isolation Forest
+4. Local Outlier Factor
+
+#00 setup
+##a. load packages, set directory
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '/storage1/fs1/seethu/Active/The_Dope_Detectives')
+
+library(tidyverse)
+library(ggplot2)
+library()
+library(solitude) #isolation forest
+library(isotree)  #isolation forest
+
+#stop unnecessary alerts
+options(tidyverse.quiet = TRUE)
+options(dplyr.summarise.inform = FALSE)
+```
+
+##b. load data
+- note: feature engineering will be needed to optimize gaussian anomaly detections
+```{r}
+bad <- read.csv("Bad_Buyers_Data.csv") %>% as_tibble()
+clean <- read.csv("Clean_Buyers_Data.csv") %>% as_tibble()
+
+#choose variables of interest -- todo: feature engineering
+#get top 19 seethu recommended, currently waiting on data dictionary from annie
+names(clean)
+#clean <- clean %>% 
+#  select(
+#    X, BUYER_DEA_NO, #for record reference
+#    avg_MME, max_MME, std_MME,
+#    
+#  )
+  
+
+#subset test and train, 50/50 split
+set.seed(1)
+subset <- sample(nrow(clean), nrow(clean)/2)
+train <- clean[subset,]
+validation <- clean[-subset,]
+
+#add indicator in new buyer_type column to both sets before joining
+validation <- validation %>% 
+  mutate(buyer_type = 0) #buyer_type = 0 means good buyer
+bad <- bad %>% 
+  mutate(buyer_type = 1) #buyer_type = 1 means bad buyer
+
+#add the bad buyers into the validation set
+validation <- validation %>% bind_rows(bad)
+
+#clean up
+rm(subset)
+```
+
+
+#01 Joint Gaussian
+
+#02 Multivariate Gaussian
+
+#03 Isolation Forest
+Isolation Forests use isolation trees to determine the path length it takes for each record to be isolated on a node of the tree. Uses binary splits from a randomly selected variable.
+- packages used: solitude or isotree. Need to select one of the two. For now implement in solitude unless limitations are found
+##a. solitude implementation
+- doesn't support NA values
+```{r}
+head(train)
+#see there are many NA values in the data -- can't make a random forest if there are NAs. either drop these cases or impute
+
+iso <- isolationForest$new()
+iso$fit(train)
+
+#In any case, if your predictors have missing values, you have (basically) two choices:
+# 1. Use a different tool (rpart handles missing values nicely.)
+# 2. Impute the missing values
+#Not surprisingly, the randomForest package has a function for doing just this, rfImpute. The documentation at ?rfImpute runs through a basic example of its use.
+
+
+
+scores_train = pima_train %>%
+iso$predict() %>%
+arrange(desc(anomaly_score))
+
+```
+
+##b. isotree implementation
+NA handling:
+- missing_action defaults to "divide" when ndim = 1. this handles NAs by "follow both branches and combine the result with the weight given by the fraction of the data that went to each branch when fitting the model"
+
+inputs:
+- use default values for majority of arguments. arguemnts definitions for arguments used:
+  - df - data to fit the model with
+  - sample_size - size of sub-sample with which each binary tree will be built with. lower to decrease model size and run time
+  - ntrees - number of binary trees to build for the model. more trees are needed for reliable results when there are many columns, categorical variables, categorical variables with many categories, or ndim is high. 1000 is in professor's slides
+  - ndim - number of columns to combine to produce a split. professor's slides use 1
+  - max_depth - max depth of the binary tree to grow. default is the corresponding depth of a balanced binary tree -- no need to build whole tree if only looking for outliers. I'll go with default for now, might need to change later. set higher value than defualt if using isolation tree for something other than outlier detcetion
+  
+outputs:
+- outlier score, score between 0 and 1 where closer to 1 indicates more of an outlier
+- average distance, average path lenght it takes to isolate a record
+
+### 0. setup inputs and model output
+```{r}
+#remove columns that aren't need to fit model
+iso_train <- train %>% select(-X, -BUYER_DEA_NO)
+
+#df to hold outlier score and average distance for each record in the training set
+iso_train_outputs <- train %>% 
+  select(X, BUYER_DEA_NO)
+#saved version in RDS 01_isolation_model_train_outputs.rds
+
+#df to analyze models on validation set
+iso_validation_outputs <- train %>% 
+  select(X, BUYER_DEA_NO)
+#saved version in RDS 01_isolation_model_validation_outputs.rds
+
+#df to hold summarized model stats
+iso_outputs_summarized = tibble(
+  model_name = character(), 
+  min_outlier_score = numeric(), 
+  max_outlier_score = numeric(), 
+  mean_outlier_score = numeric(),
+  std_dev_outlier_score = numeric(),
+  #hist_outlier_score = model() ?
+  min_avg_depth = numeric(), 
+  max_avg_depth = numeric(), 
+  mean_avg_depth = numeric(),
+  std_dev_avg_depth = numeric()
+  #hist_avg_depth = model() ?
+)
+```
+
+todo: run iso 1
+### 1. iso1
+- run with output_score, output_dist, and max_depth = 25000
+- takes really long, run later
+```{r}
+set.seed(1)
+
+#run model
+iso_1 <- isolation.forest(
+  df = iso_train, 
+  sample_size = nrow(iso_train),
+  ntrees = 1000,
+  ndim = 1,
+  max_depth = 25000,
+  output_score = TRUE,
+  output_dist = TRUE
+)
+
+#check outlier score for each record in training set, append to training set
+iso_train_outputs <- iso_train_outputs %>% 
+  mutate(
+    iso_1_outlier_score = predict(iso_1, iso_train),
+    iso_1_avg_depth = predict(iso_1, iso_train, type = "avg_depth")
+  )
+
+#TODO: add summary statistics to iso_outputs_sumarized df
+
+#min = 0.3006
+#max = 0.5718
+#expected value (mean) = 0.3628
+#std deviation = 0.0387
+iso_train$iso_outlier_score %>% summary()
+iso_train$iso_outlier_score %>% sd()
+hist(iso_train$iso_outlier_score)
+```
+
+
+### 2. iso2
+- run max_depth as default
+```{r}
+set.seed(1)
+
+#run model
+iso_2 <- isolation.forest(
+  df = iso_train, 
+  sample_size = nrow(iso_train),
+  ntrees = 1000,
+  ndim = 1
+)
+
+#add outlier score and avg depth to outliers df
+iso_train_outputs <- iso_train_outputs %>% 
+  mutate(
+    iso_2_outlier_score = predict(iso_2, iso_train),
+    iso_2_avg_depth = predict(iso_2, iso_train, type = "avg_depth")
+  )
+
+#TODO: add summary statistics to iso_outputs_sumarized df
+
+#save model object for future reference
+#saveRDS(iso_2, "02_isolation_model_2.rds")
+```
+
+
+### 3. iso3
+- run max_depth as 25000
+```{r}
+set.seed(1)
+
+#run model
+iso_3 <- isolation.forest(
+  df = iso_train, 
+  sample_size = nrow(iso_train),
+  ntrees = 1000,
+  ndim = 1,
+  max_depth = 25000
+)
+
+#check outlier score for each record in training set, append to training set
+iso_train_outputs <- iso_train_outputs %>% 
+  mutate(
+    iso_3_outlier_score = predict(iso_3, iso_train),
+    iso_3_avg_depth = predict(iso_3, iso_train, type = "avg_depth")
+  )
+
+#TODO: add summary statistics to iso_outputs_sumarized df
+
+#save model object for future reference
+#saveRDS(iso_3, "02_isolation_model_3.rds")
+```
+
+
+### 4. compare models
+```{r}
+iso_validation <- validation %>% select(-X, -BUYER_DEA_NO)
+
+iso_validation_outputs <- iso_validation_outputs %>% 
+  mutate(
+    iso_2_outlier_score = predict(iso_2, iso_train),
+    iso_2_avg_depth = predict(iso_2, iso_train, type = "avg_depth"),
+    iso_3_outlier_score = predict(iso_3, iso_train),
+    iso_3_avg_depth = predict(iso_3, iso_train, type = "avg_depth")
+  )
+
+iso_validation_outputs <- iso_validation_outputs %>% 
+  mutate(
+    iso_2_classification = ifelse(iso_2_outlier_score <0.5, 0, 1), #1 if outlier, 0 if not
+    iso_3_classification = ifelse(iso_3_outlier_score <0.5, 0, 1)
+  )
+
+#histogram of outlier socres
+hist(iso_validation_outputs$iso_2_outlier_score)
+hist(iso_validation_outputs$iso_3_outlier_score)
+
+
+iso_validation_outputs %>% View()
+
+#view rows that are classified as outliers
+#note -- majority of BAD BUYERS are NOT identified as bad through this algorithm
+iso_validation_outputs %>% filter(iso_2_classification == 1)
+iso_validation_outputs %>% filter(iso_3_classification == 1)
+
+```
+
+
+
+
+#04 Local Outlier Factor
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
